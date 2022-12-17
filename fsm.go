@@ -5,31 +5,23 @@ import (
 	"fmt"
 )
 
-type FSMDefinition[S any, E any] interface {
+type Definition[S comparable, E Comparable[E]] interface {
 	States() []S
 	Events() []E
 	Transitions() []Transition[S, E]
 }
 
-type OnTransition[S any, E any] interface {
-	OnTransition(context.Context, Transition[S, E]) error
+type OnTransition[S comparable, E Comparable[E]] interface {
+	OnTransition(context.Context, Instance[S, E], Transition[S, E]) error
 }
 
-type BeforeEvent[S any, E any] interface {
-	BeforeEvent(context.Context, Transition[S, E]) error
-}
-
-type AfterEvent[S any, E any] interface {
-	AfterEvent(context.Context, Transition[S, E]) error
-}
-
-type Transition[S any, E any] struct {
+type Transition[S comparable, E Comparable[E]] struct {
 	From  S
 	To    S
 	Event E
 }
 
-func Print[S any, E any](def FSMDefinition[S, E]) {
+func Print[S comparable, E Comparable[E]](def Definition[S, E]) {
 	fmt.Println("STATES:")
 	for _, s := range def.States() {
 		fmt.Println("- ", s)
@@ -44,4 +36,28 @@ func Print[S any, E any](def FSMDefinition[S, E]) {
 	for _, t := range def.Transitions() {
 		fmt.Println("- ", t)
 	}
+}
+
+type Instance[S comparable, E Comparable[E]] interface {
+	// AvailableEvents returns a list of events available in the current state.
+	AvailableEvents() []E
+	// Can returns true if event can occur in the current state.
+	Can(E) bool
+	// Current returns the current state of the FSM instance.
+	Current() S
+	// Send initiates a state transition with the event.
+	Send(context.Context, E) error
+}
+
+type Runner[S comparable, E Comparable[E]] struct {
+	Definition  Definition[S, E]
+	Instantiate func(Definition[S, E]) Instance[S, E]
+}
+
+func (r *Runner[S, E]) Run() Instance[S, E] {
+	return r.Instantiate(r.Definition)
+}
+
+type Comparable[T any] interface {
+	Equals(T) bool
 }
