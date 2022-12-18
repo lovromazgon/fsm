@@ -3,22 +3,21 @@ package internal
 import (
 	"context"
 	"errors"
+	"reflect"
 
 	"github.com/lovromazgon/fsm"
 )
 
-type Instance[S comparable, E fsm.Comparable[E]] struct {
+type Instance[S comparable, E any] struct {
 	states      []S
 	events      []E
 	transitions []fsm.Transition[S, E]
 	current     S
+
+	eventEquals func(E, E) bool
 }
 
-type foo struct{}
-
-func (foo) Equals(foo) bool { return true }
-
-var _ fsm.Instance[int, foo] = &Instance[int, foo]{}
+var _ fsm.Instance[int, any] = &Instance[int, any]{}
 
 func (i *Instance[S, E]) AvailableEvents() []E {
 	var events []E
@@ -32,7 +31,7 @@ func (i *Instance[S, E]) AvailableEvents() []E {
 
 func (i *Instance[S, E]) Can(want E) bool {
 	for _, got := range i.AvailableEvents() {
-		if got.Equals(want) {
+		if i.eventEquals(got, want) {
 			return true
 		}
 	}
@@ -45,7 +44,7 @@ func (i *Instance[S, E]) Current() S {
 
 func (i *Instance[S, E]) Send(ctx context.Context, e E) error {
 	for _, t := range i.transitions {
-		if t.From == i.current && t.Event.Equals(e) {
+		if t.From == i.current && i.eventEquals(t.Event, e) {
 			i.current = t.To
 			return nil
 		}
@@ -53,11 +52,28 @@ func (i *Instance[S, E]) Send(ctx context.Context, e E) error {
 	return errors.New("can't")
 }
 
-func Instantiate[S comparable, E fsm.Comparable[E]](definition fsm.Definition[S, E]) fsm.Instance[S, E] {
-	return &Instance[S, E]{
+func (i *Instance[S, E]) init() {
+	e := new(E)
+
+	switch reflect.TypeOf(e).Elem().Kind() {
+	case reflect.Interface, reflect.Pointer:
+		i.eventEquals = func(e1, e2 E) bool {
+			return reflect.TypeOf(e1).String() == reflect.TypeOf(e2).String()
+		}
+	default:
+		i.eventEquals = func(e1, e2 E) bool {
+			return reflect.ValueOf(e1).Interface() == reflect.ValueOf(e2).Interface()
+		}
+	}
+}
+
+func Instantiate[S comparable, E any](definition fsm.Definition[S, E]) fsm.Instance[S, E] {
+	i := &Instance[S, E]{
 		states:      definition.States(),
 		events:      definition.Events(),
 		transitions: definition.Transitions(),
 		current:     definition.States()[0],
 	}
+	i.init()
+	return i
 }

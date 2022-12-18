@@ -1,13 +1,12 @@
-package fsm_test
+package looplab
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"reflect"
 	"testing"
 
 	"github.com/lovromazgon/fsm"
-	"github.com/lovromazgon/fsm/internal"
 )
 
 func TestFooFSM(t *testing.T) {
@@ -16,7 +15,7 @@ func TestFooFSM(t *testing.T) {
 
 	runner := fsm.Runner[FooState, FooEvent]{
 		Definition:  def.FSMDefinition(),
-		Instantiate: internal.Instantiate[FooState, FooEvent],
+		Instantiate: Instantiate[FooState, FooEvent],
 	}
 
 	ins := runner.Run()
@@ -32,7 +31,7 @@ func TestFooFSM(t *testing.T) {
 	fmt.Println(ins.Current())
 	fmt.Println("-------------------")
 
-	err = ins.Send(context.Background(), FooEventFail{})
+	err = ins.Send(context.Background(), FooEventFail{Err: errors.New("whoops")})
 	fmt.Println(err)
 	fmt.Println(ins.Current())
 	fmt.Println("-------------------")
@@ -40,6 +39,8 @@ func TestFooFSM(t *testing.T) {
 
 // FSM definition
 type FooFSM struct{}
+type FooState string
+type FooEvent interface{ fooEvent() }
 
 func (f FooFSM) FSMDefinition() fsm.Definition[FooState, FooEvent] {
 	return f
@@ -73,12 +74,6 @@ func (FooFSM) Transitions() []fsm.Transition[FooState, FooEvent] {
 	}
 }
 
-type FooState string
-type FooEvent interface {
-	fooEvent()
-	Equals(event FooEvent) bool
-}
-
 // define states
 const (
 	FooStateRunning FooState = "Running"
@@ -99,14 +94,5 @@ type (
 )
 
 func (FooEventWait) fooEvent() {}
-func (FooEventWait) Equals(event FooEvent) bool {
-	return reflect.TypeOf(event).String() == "fsm_test.FooEventWait"
-}
 func (FooEventStop) fooEvent() {}
-func (FooEventStop) Equals(event FooEvent) bool {
-	return reflect.TypeOf(event).String() == "fsm_test.FooEventStop"
-}
 func (FooEventFail) fooEvent() {}
-func (FooEventFail) Equals(event FooEvent) bool {
-	return reflect.TypeOf(event).String() == "fsm_test.FooEventFail"
-}
