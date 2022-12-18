@@ -59,6 +59,7 @@ func (i *Instance[S, E]) Send(ctx context.Context, e E) error {
 		return errors.New("can't")
 	}
 
+	transition.Event = e // overwrite event so we can send it to callback
 	if i.beforeTransition != nil {
 		err := i.beforeTransition.BeforeTransition(ctx, i, transition)
 		if err != nil {
