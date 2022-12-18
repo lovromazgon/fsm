@@ -10,8 +10,12 @@ type Definition[S comparable, E any] interface {
 	Transitions() []Transition[S, E]
 }
 
-type OnTransition[S comparable, E any] interface {
-	OnTransition(context.Context, Instance[S, E], Transition[S, E]) error
+type BeforeTransition[S comparable, E any] interface {
+	BeforeTransition(context.Context, Instance[S, E], Transition[S, E]) error
+}
+
+type AfterTransition[S comparable, E any] interface {
+	AfterTransition(context.Context, Instance[S, E], Transition[S, E]) error
 }
 
 type Transition[S comparable, E any] struct {

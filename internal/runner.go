@@ -14,6 +14,9 @@ type Instance[S comparable, E any] struct {
 	transitions []fsm.Transition[S, E]
 	current     S
 
+	beforeTransition fsm.BeforeTransition[S, E]
+	afterTransition  fsm.AfterTransition[S, E]
+
 	eventEquals func(E, E) bool
 }
 
@@ -43,13 +46,35 @@ func (i *Instance[S, E]) Current() S {
 }
 
 func (i *Instance[S, E]) Send(ctx context.Context, e E) error {
+	var transition fsm.Transition[S, E]
+	var found bool
 	for _, t := range i.transitions {
 		if t.From == i.current && i.eventEquals(t.Event, e) {
-			i.current = t.To
-			return nil
+			transition = t
+			found = true
+			break
 		}
 	}
-	return errors.New("can't")
+	if !found {
+		return errors.New("can't")
+	}
+
+	if i.beforeTransition != nil {
+		err := i.beforeTransition.BeforeTransition(ctx, i, transition)
+		if err != nil {
+			return err
+		}
+	}
+	i.current = transition.To
+	if i.afterTransition != nil {
+		err := i.afterTransition.AfterTransition(ctx, i, transition)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+
 }
 
 func (i *Instance[S, E]) init() {
@@ -67,13 +92,21 @@ func (i *Instance[S, E]) init() {
 	}
 }
 
-func Instantiate[S comparable, E any](definition fsm.Definition[S, E]) fsm.Instance[S, E] {
+func Instantiate[S comparable, E any](def fsm.Definition[S, E]) fsm.Instance[S, E] {
 	i := &Instance[S, E]{
-		states:      definition.States(),
-		events:      definition.Events(),
-		transitions: definition.Transitions(),
-		current:     definition.States()[0],
+		states:      def.States(),
+		events:      def.Events(),
+		transitions: def.Transitions(),
+		current:     def.States()[0],
 	}
 	i.init()
+
+	if ot, ok := def.(fsm.BeforeTransition[S, E]); ok {
+		i.beforeTransition = ot
+	}
+	if at, ok := def.(fsm.AfterTransition[S, E]); ok {
+		i.afterTransition = at
+	}
+
 	return i
 }

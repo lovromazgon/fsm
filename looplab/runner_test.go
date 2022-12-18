@@ -11,7 +11,6 @@ import (
 
 func TestFooFSM(t *testing.T) {
 	def := FooFSM{}
-	// fsm.Print(def.FSMDefinition())
 
 	runner := fsm.Runner[FooState, FooEvent]{
 		Definition:  def.FSMDefinition(),
@@ -44,6 +43,16 @@ type FooEvent interface{ fooEvent() }
 
 func (f FooFSM) FSMDefinition() fsm.Definition[FooState, FooEvent] {
 	return f
+}
+
+func (f FooFSM) BeforeTransition(ctx context.Context, i fsm.Instance[FooState, FooEvent], t fsm.Transition[FooState, FooEvent]) error {
+	fmt.Printf("BEFORE: currently %v, going to %v, because of %T\n", i.Current(), t.To, t.Event)
+	return nil
+}
+
+func (f FooFSM) AfterTransition(ctx context.Context, i fsm.Instance[FooState, FooEvent], t fsm.Transition[FooState, FooEvent]) error {
+	fmt.Printf("AFTER: currently %v, came from %v, because of %T\n", i.Current(), t.From, t.Event)
+	return nil
 }
 
 func (FooFSM) States() []FooState {

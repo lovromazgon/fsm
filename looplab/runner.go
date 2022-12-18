@@ -54,10 +54,42 @@ func Instantiate[S comparable, E any](def fsm.Definition[S, E]) fsm.Instance[S, 
 		}
 	}
 
+	callbacks := make(map[string]looplab.Callback)
+	if ot, ok := def.(fsm.BeforeTransition[S, E]); ok {
+		callbacks["before_event"] = func(ctx context.Context, event *looplab.Event) {
+			e := event.Args[0].(E)
+			transition := fsm.Transition[S, E]{
+				From:  i.stateStringer.ToType(event.Src),
+				To:    i.stateStringer.ToType(event.Dst),
+				Event: e,
+			}
+
+			err := ot.BeforeTransition(ctx, i, transition)
+			if err != nil {
+				event.Cancel(err)
+			}
+		}
+	}
+	if at, ok := def.(fsm.AfterTransition[S, E]); ok {
+		callbacks["after_event"] = func(ctx context.Context, event *looplab.Event) {
+			e := event.Args[0].(E)
+			transition := fsm.Transition[S, E]{
+				From:  i.stateStringer.ToType(event.Src),
+				To:    i.stateStringer.ToType(event.Dst),
+				Event: e,
+			}
+
+			err := at.AfterTransition(ctx, i, transition)
+			if err != nil {
+				event.Err = err
+			}
+		}
+	}
+
 	i.fsm = looplab.NewFSM(
 		i.stateStringer.ToString(def.States()[0]),
 		events,
-		nil,
+		callbacks,
 	)
 
 	return i
