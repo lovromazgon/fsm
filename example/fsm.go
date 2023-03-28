@@ -3,31 +3,23 @@ package example
 import (
 	"context"
 	"fmt"
-
 	"github.com/lovromazgon/fsm"
 )
 
-// FSM definition
-type FooFSM struct{}
+// FooDef is the definition of a FSM.
+type FooDef struct{}
 type FooState string
 type FooEvent interface{ fooEvent() }
 
-func (f FooFSM) FSMDefinition() fsm.Definition[FooState, FooEvent] {
+func (f FooDef) Def() fsm.Definition[FooState, FooEvent] {
 	return f
 }
 
-func (f FooFSM) BeforeTransition(ctx context.Context, i fsm.Instance[FooState, FooEvent], t fsm.Transition[FooState, FooEvent]) error {
-	fmt.Printf("BEFORE: currently %v, going to %v, because of %T\n", i.Current(), t.To, t.Event)
-	return nil
+func (FooDef) New() fsm.Instance[FooState, FooEvent] {
+	return &FooInstance{}
 }
 
-func (f FooFSM) AfterTransition(ctx context.Context, i fsm.Instance[FooState, FooEvent], t fsm.Transition[FooState, FooEvent]) error {
-	fmt.Printf("AFTER: currently %v, came from %v, because of %T\n", i.Current(), t.From, t.Event)
-	fmt.Printf("AFTER: full event: %+v\n", t.Event)
-	return nil
-}
-
-func (FooFSM) States() []FooState {
+func (FooDef) States() []FooState {
 	return []FooState{
 		FooStateRunning,
 		FooStateWaiting,
@@ -36,7 +28,7 @@ func (FooFSM) States() []FooState {
 	}
 }
 
-func (FooFSM) Events() []FooEvent {
+func (FooDef) Events() []FooEvent {
 	return []FooEvent{
 		FooEventWait{},
 		FooEventStop{},
@@ -45,7 +37,7 @@ func (FooFSM) Events() []FooEvent {
 }
 
 // Transitions returns the possible transitions.
-func (FooFSM) Transitions() []fsm.Transition[FooState, FooEvent] {
+func (FooDef) Transitions() []fsm.Transition[FooState, FooEvent] {
 	return []fsm.Transition[FooState, FooEvent]{
 		{Event: FooEventWait{}, From: FooStateRunning, To: FooStateWaiting},
 		{Event: FooEventStop{}, From: FooStateWaiting, To: FooStateDone},
@@ -77,3 +69,37 @@ type (
 func (FooEventWait) fooEvent() {}
 func (FooEventStop) fooEvent() {}
 func (FooEventFail) fooEvent() {}
+
+type FooInstance struct {
+	LastState FooState
+}
+
+func (a *FooInstance) Observe(ctx context.Context, i fsm.FSM[FooState]) (FooEvent, error) {
+	defer func() {
+		a.LastState = i.Current()
+	}()
+	if a.LastState != i.Current() {
+		fmt.Println("new state, let's just execute action")
+		return nil, nil
+	}
+	fmt.Println("same state as before, transitioning")
+	switch i.Current() {
+	case FooStateRunning:
+		return FooEventWait{}, nil
+	case FooStateWaiting:
+		return FooEventStop{}, nil
+	default:
+		return FooEventFail{}, nil
+	}
+}
+
+func (a *FooInstance) Action(ctx context.Context, i fsm.FSM[FooState]) error {
+	fmt.Printf("ACTION: currently %v, old %v\n", i.Current(), a.LastState)
+	return nil
+}
+
+func (a *FooInstance) Transition(ctx context.Context, i fsm.FSM[FooState], t fsm.Transition[FooState, FooEvent]) error {
+	fmt.Printf("BEFORE: currently %v, going to %v, because of %T\n", i.Current(), t.To, t.Event)
+	fmt.Printf("BEFORE: full event: %+v\n", t.Event)
+	return nil
+}
