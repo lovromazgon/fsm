@@ -14,6 +14,7 @@ package example
 import (
 	"context"
 	"fmt"
+
 	"github.com/lovromazgon/fsm"
 )
 

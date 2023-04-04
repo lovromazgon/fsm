@@ -2,37 +2,41 @@ package looplab
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/lovromazgon/fsm"
 	"github.com/lovromazgon/fsm/example"
 )
 
 func TestFooFSM(t *testing.T) {
-	def := example.FooFSM{}
+	def := example.FooDef{}
 
-	runner := fsm.Runner[example.FooState, example.FooEvent]{
-		Definition:  def.FSMDefinition(),
-		Instantiate: Instantiate[example.FooState, example.FooEvent],
+	runner := fsm.Runner[example.FooState, example.FooObservation]{
+		Definition:  def,
+		Instantiate: Instantiate[example.FooState, example.FooObservation],
 	}
 
 	ins := runner.Run()
 	fmt.Printf("%#v\n", ins)
-	fmt.Printf("%#v\n", ins.AvailableEvents())
-	fmt.Printf("can stop: %v\n", ins.Can(example.FooEventStop{}))
 
 	fmt.Println("state:", ins.Current())
 	fmt.Println("-------------------")
 
-	err := ins.Send(context.Background(), example.FooEventStop{})
-	fmt.Println("err:  ", err)
-	fmt.Println("state:", ins.Current())
-	fmt.Println("-------------------")
+	for {
+		// the sleep simulates delay between FSM ticks
+		time.Sleep(time.Second / 2)
 
-	err = ins.Send(context.Background(), example.FooEventFail{Err: errors.New("whoops")})
-	fmt.Println("err:  ", err)
-	fmt.Println("state:", ins.Current())
-	fmt.Println("-------------------")
+		err := ins.Tick(context.Background())
+		fmt.Println("err:  ", err)
+		fmt.Println("state:", ins.Current())
+		fmt.Println("-------------------")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ins.Current() == example.FooStateFailed {
+			break
+		}
+	}
 }

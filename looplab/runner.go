@@ -2,6 +2,8 @@ package looplab
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"reflect"
 	"sync"
 
@@ -9,90 +11,93 @@ import (
 	"github.com/lovromazgon/fsm"
 )
 
-type Instance[S comparable, E any] struct {
+type FSM[S comparable, O any] struct {
 	stateStringer stringer[S]
-	eventStringer stringer[E]
 
-	fsm *looplab.FSM
+	transitions []fsm.Transition[S, O]
+	instance    fsm.Instance[S, O]
+	fsm         *looplab.FSM
 }
 
-var _ fsm.Instance[int, any] = &Instance[int, any]{}
+var _ fsm.FSM[int] = &FSM[int, any]{}
 
-func (i *Instance[S, E]) AvailableEvents() []E {
-	events := i.fsm.AvailableTransitions()
-	es := make([]E, len(events))
-	for j, event := range events {
-		es[j] = i.eventStringer.ToType(event)
+func (f FSM[S, O]) Current() S {
+	return f.stateStringer.ToType(f.fsm.Current())
+}
+
+func (f FSM[S, O]) Tick(ctx context.Context) error {
+	o, err := f.instance.Observe(ctx, f)
+	if err != nil {
+		return fmt.Errorf("observe failed: %w", err)
 	}
-	return es
+
+	for _, t := range f.transitions {
+		if t.From == f.stateStringer.ToType(f.fsm.Current()) && t.Condition(o) {
+			// this triggers transition and state action
+			return f.fsm.Event(ctx, buildEventName(t, f.stateStringer), o)
+		}
+	}
+
+	// no transition found, send dummy event to trigger action
+	err = f.fsm.Event(ctx, f.fsm.Current()+"::ACTION", o)
+	if err != nil && !errors.Is(err, looplab.NoTransitionError{}) {
+		return err
+	}
+
+	return nil
 }
 
-func (i *Instance[S, E]) Can(want E) bool {
-	return i.fsm.Can(i.eventStringer.ToString(want))
-}
-
-func (i *Instance[S, E]) Current() S {
-	return i.stateStringer.ToType(i.fsm.Current())
-}
-
-func (i *Instance[S, E]) Send(ctx context.Context, e E) error {
-	return i.fsm.Event(ctx, i.eventStringer.ToString(e), e)
-}
-
-func Instantiate[S comparable, E any](def fsm.Definition[S, E]) fsm.Instance[S, E] {
-	i := &Instance[S, E]{
+func Instantiate[S comparable, O any](def fsm.Definition[S, O]) fsm.FSM[S] {
+	f := &FSM[S, O]{
 		stateStringer: newStringer(def.States()),
-		eventStringer: newStringer(def.Events()),
+
+		transitions: def.Transitions(),
+		instance:    def.New(),
 	}
 
-	events := make([]looplab.EventDesc, len(def.Transitions()))
-	for j, t := range def.Transitions() {
-		events[j] = looplab.EventDesc{
-			Name: i.eventStringer.ToString(t.Event),
-			Src:  []string{i.stateStringer.ToString(t.From)},
-			Dst:  i.stateStringer.ToString(t.To),
-		}
-	}
-
+	events := make([]looplab.EventDesc, 0, len(def.Transitions())+len(def.States()))
 	callbacks := make(map[string]looplab.Callback)
-	if ot, ok := def.(fsm.BeforeTransition[S, E]); ok {
-		callbacks["before_event"] = func(ctx context.Context, event *looplab.Event) {
-			e := event.Args[0].(E)
-			transition := fsm.Transition[S, E]{
-				From:  i.stateStringer.ToType(event.Src),
-				To:    i.stateStringer.ToType(event.Dst),
-				Event: e,
-			}
-
-			err := ot.BeforeTransition(ctx, i, transition)
+	for _, t := range def.Transitions() {
+		transition := t
+		event := buildEventName(t, f.stateStringer)
+		events = append(events, looplab.EventDesc{
+			Name: event,
+			Src:  []string{f.stateStringer.ToString(t.From)},
+			Dst:  f.stateStringer.ToString(t.To),
+		})
+		callbacks["before_"+event] = func(ctx context.Context, e *looplab.Event) {
+			err := f.instance.Transition(ctx, f, transition, e.Args[0].(O))
 			if err != nil {
-				event.Cancel(err)
-			}
-		}
-	}
-	if at, ok := def.(fsm.AfterTransition[S, E]); ok {
-		callbacks["after_event"] = func(ctx context.Context, event *looplab.Event) {
-			e := event.Args[0].(E)
-			transition := fsm.Transition[S, E]{
-				From:  i.stateStringer.ToType(event.Src),
-				To:    i.stateStringer.ToType(event.Dst),
-				Event: e,
-			}
-
-			err := at.AfterTransition(ctx, i, transition)
-			if err != nil {
-				event.Err = err
+				e.Cancel(err)
 			}
 		}
 	}
 
-	i.fsm = looplab.NewFSM(
-		i.stateStringer.ToString(def.States()[0]),
+	for _, s := range def.States() {
+		state := f.stateStringer.ToString(s)
+		// add dummy events that will be used to execute action in case no
+		// transition happens
+		event := state + "::ACTION"
+		events = append(events, looplab.EventDesc{
+			Name: event,
+			Src:  []string{state},
+			Dst:  state,
+		})
+		callbacks["enter_"+state] = func(ctx context.Context, e *looplab.Event) {
+			err := f.instance.Action(ctx, f, e.Args[0].(O))
+			if err != nil {
+				e.Cancel(err)
+			}
+		}
+	}
+
+	f.fsm = looplab.NewFSM(
+		f.stateStringer.ToString(def.States()[0]),
 		events,
 		callbacks,
 	)
 
-	return i
+	return f
 }
 
 // cachedStringers caches stringers, so they are not recreated every time.
@@ -142,4 +147,8 @@ func (c stringer[T]) ToString(t T) string {
 
 func (c stringer[T]) ToType(s string) T {
 	return c.mapping[s]
+}
+
+func buildEventName[S comparable, O any](t fsm.Transition[S, O], stringer stringer[S]) string {
+	return stringer.ToString(t.From) + "::" + stringer.ToString(t.To)
 }

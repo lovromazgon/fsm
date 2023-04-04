@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"fmt"
+
 	"github.com/lovromazgon/fsm"
 )
 
@@ -15,22 +16,22 @@ type FSM[S comparable, O any] struct {
 
 var _ fsm.FSM[int] = &FSM[int, any]{}
 
-func (i *FSM[S, O]) Current() S {
-	return i.current
+func (f *FSM[S, O]) Current() S {
+	return f.current
 }
 
-func (i *FSM[S, O]) Tick(ctx context.Context) error {
-	o, err := i.instance.Observe(ctx, i)
+func (f *FSM[S, O]) Tick(ctx context.Context) error {
+	o, err := f.instance.Observe(ctx, f)
 	if err != nil {
 		return fmt.Errorf("observe failed: %w", err)
 	}
 
-	err = i.transition(ctx, o)
+	err = f.transition(ctx, o)
 	if err != nil {
 		return err
 	}
 
-	err = i.instance.Action(ctx, i, o)
+	err = f.instance.Action(ctx, f, o)
 	if err != nil {
 		return err
 	}
@@ -39,16 +40,16 @@ func (i *FSM[S, O]) Tick(ctx context.Context) error {
 	return nil
 }
 
-func (i *FSM[S, O]) transition(ctx context.Context, o O) error {
-	for _, t := range i.transitions {
-		if t.From == i.current && t.Condition(o) {
+func (f *FSM[S, O]) transition(ctx context.Context, o O) error {
+	for _, t := range f.transitions {
+		if t.From == f.current && t.Condition(o) {
 			// found the transition we want to follow
-			err := i.instance.Transition(ctx, i, t, o)
+			err := f.instance.Transition(ctx, f, t, o)
 			if err != nil {
 				return err
 			}
 
-			i.current = t.To
+			f.current = t.To
 			return nil
 		}
 	}

@@ -3,10 +3,11 @@ package internal
 import (
 	"context"
 	"fmt"
-	"github.com/lovromazgon/fsm"
-	"github.com/lovromazgon/fsm/example"
 	"testing"
 	"time"
+
+	"github.com/lovromazgon/fsm"
+	"github.com/lovromazgon/fsm/example"
 )
 
 func TestFooFSM(t *testing.T) {
