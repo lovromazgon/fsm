@@ -33,12 +33,16 @@ func (f FSM[S, O]) Tick(ctx context.Context) error {
 
 	for _, t := range f.transitions {
 		if t.From == f.stateStringer.ToType(f.fsm.Current()) && t.Condition(o) {
-			// this triggers transition and state action
-			return f.fsm.Event(ctx, buildEventName(t, f.stateStringer), o)
+			// this triggers transition
+			err := f.fsm.Event(ctx, buildEventName(t, f.stateStringer), o)
+			if err != nil {
+				return err
+			}
+			break
 		}
 	}
 
-	// no transition found, send dummy event to trigger action
+	// send another dummy event to trigger action
 	err = f.fsm.Event(ctx, f.fsm.Current()+"::ACTION", o)
 	if err != nil && !errors.Is(err, looplab.NoTransitionError{}) {
 		return err
@@ -83,7 +87,7 @@ func New[S comparable, O any](def fsm.Definition[S, O]) fsm.FSM[S] {
 			Src:  []string{state},
 			Dst:  state,
 		})
-		callbacks["enter_"+state] = func(ctx context.Context, e *looplab.Event) {
+		callbacks["after_"+event] = func(ctx context.Context, e *looplab.Event) {
 			err := f.instance.Action(ctx, f, e.Args[0].(O))
 			if err != nil {
 				e.Cancel(err)
