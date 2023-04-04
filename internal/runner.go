@@ -2,60 +2,35 @@ package internal
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"reflect"
-
 	"github.com/lovromazgon/fsm"
 )
 
-type FSM[S comparable, E any] struct {
+type FSM[S comparable, O any] struct {
 	states      []S
-	events      []E
-	transitions []fsm.Transition[S, E]
+	transitions []fsm.Transition[S, O]
 	current     S
-	instance    fsm.Instance[S, E]
-
-	eventEquals func(E, E) bool
+	instance    fsm.Instance[S, O]
 }
 
 var _ fsm.FSM[int] = &FSM[int, any]{}
 
-func (i *FSM[S, E]) AvailableEvents() []E {
-	var events []E
-	for _, t := range i.transitions {
-		if t.From == i.current {
-			events = append(events, t.Event)
-		}
-	}
-	return events
-}
-
-func (i *FSM[S, E]) Can(want E) bool {
-	for _, got := range i.AvailableEvents() {
-		if i.eventEquals(got, want) {
-			return true
-		}
-	}
-	return false
-}
-
-func (i *FSM[S, E]) Current() S {
+func (i *FSM[S, O]) Current() S {
 	return i.current
 }
 
-func (i *FSM[S, E]) Tick(ctx context.Context) error {
-	e, err := i.instance.Observe(ctx, i)
+func (i *FSM[S, O]) Tick(ctx context.Context) error {
+	o, err := i.instance.Observe(ctx, i)
 	if err != nil {
 		return fmt.Errorf("observe failed: %w", err)
 	}
 
-	switch {
-	case reflect.ValueOf(e).IsValid():
-		err = i.transition(ctx, e)
-	default:
-		err = i.action(ctx)
+	err = i.transition(ctx, o)
+	if err != nil {
+		return err
 	}
+
+	err = i.instance.Action(ctx, i, o)
 	if err != nil {
 		return err
 	}
@@ -64,59 +39,29 @@ func (i *FSM[S, E]) Tick(ctx context.Context) error {
 	return nil
 }
 
-func (i *FSM[S, E]) action(ctx context.Context) error {
-	return i.instance.Action(ctx, i)
-}
-
-func (i *FSM[S, E]) transition(ctx context.Context, e E) error {
-	var transition fsm.Transition[S, E]
-	var found bool
+func (i *FSM[S, O]) transition(ctx context.Context, o O) error {
 	for _, t := range i.transitions {
-		if t.From == i.current && i.eventEquals(t.Event, e) {
-			transition = t
-			found = true
-			break
+		if t.From == i.current && t.Condition(o) {
+			// found the transition we want to follow
+			err := i.instance.Transition(ctx, i, t, o)
+			if err != nil {
+				return err
+			}
+
+			i.current = t.To
+			return nil
 		}
 	}
-	if !found {
-		return errors.New("can't")
-	}
-
-	transition.Event = e // overwrite event so we can send it to callback
-
-	err := i.instance.Transition(ctx, i, transition)
-	if err != nil {
-		return err
-	}
-
-	i.current = transition.To
-	return nil
+	return nil // no applicable transition found, that's fine
 }
 
-func (i *FSM[S, E]) init() {
-	e := new(E)
-
-	switch reflect.TypeOf(e).Elem().Kind() {
-	case reflect.Interface, reflect.Pointer:
-		i.eventEquals = func(e1, e2 E) bool {
-			return reflect.TypeOf(e1).String() == reflect.TypeOf(e2).String()
-		}
-	default:
-		i.eventEquals = func(e1, e2 E) bool {
-			return reflect.ValueOf(e1).Interface() == reflect.ValueOf(e2).Interface()
-		}
-	}
-}
-
-func Instantiate[S comparable, E any](def fsm.Definition[S, E]) fsm.FSM[S] {
-	i := &FSM[S, E]{
+func Instantiate[S comparable, O any](def fsm.Definition[S, O]) fsm.FSM[S] {
+	i := &FSM[S, O]{
 		states:      def.States(),
-		events:      def.Events(),
 		transitions: def.Transitions(),
 		current:     def.States()[0],
 		instance:    def.New(),
 	}
-	i.init()
 
 	return i
 }

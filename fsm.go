@@ -4,23 +4,22 @@ import (
 	"context"
 )
 
-type Definition[S comparable, E any] interface {
+type Definition[S comparable, O any] interface {
 	States() []S
-	Events() []E
-	Transitions() []Transition[S, E]
-	New() Instance[S, E]
+	Transitions() []Transition[S, O]
+	New() Instance[S, O]
 }
 
-type Instance[S comparable, E any] interface {
-	Observe(context.Context, FSM[S]) (E, error)
-	Action(context.Context, FSM[S]) error
-	Transition(context.Context, FSM[S], Transition[S, E]) error
+type Instance[S comparable, O any] interface {
+	Observe(context.Context, FSM[S]) (O, error)
+	Transition(context.Context, FSM[S], Transition[S, O], O) error
+	Action(context.Context, FSM[S], O) error
 }
 
-type Transition[S comparable, E any] struct {
-	From  S
-	To    S
-	Event E
+type Transition[S comparable, O any] struct {
+	From      S
+	To        S
+	Condition func(O) bool
 }
 
 type FSM[S comparable] interface {
@@ -32,9 +31,9 @@ type FSM[S comparable] interface {
 
 // type Runner[S comparable, E any] func(Definition[S, E]) FSM[S, E]
 
-type Runner[S comparable, E any] struct {
-	Definition  Definition[S, E]
-	Instantiate func(Definition[S, E]) FSM[S]
+type Runner[S comparable, O any] struct {
+	Definition  Definition[S, O]
+	Instantiate func(Definition[S, O]) FSM[S]
 }
 
 func (r *Runner[S, E]) Run() FSM[S] {
