@@ -47,7 +47,7 @@ func (f FSM[S, O]) Tick(ctx context.Context) error {
 	return nil
 }
 
-func Instantiate[S comparable, O any](def fsm.Definition[S, O]) fsm.FSM[S] {
+func New[S comparable, O any](def fsm.Definition[S, O]) fsm.FSM[S] {
 	f := &FSM[S, O]{
 		stateStringer: newStringer(def.States()),
 

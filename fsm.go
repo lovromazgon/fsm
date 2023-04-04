@@ -29,13 +29,6 @@ type FSM[S comparable] interface {
 	Tick(ctx context.Context) error
 }
 
-// type Runner[S comparable, E any] func(Definition[S, E]) FSM[S, E]
-
-type Runner[S comparable, O any] struct {
-	Definition  Definition[S, O]
-	Instantiate func(Definition[S, O]) FSM[S]
-}
-
-func (r *Runner[S, E]) Run() FSM[S] {
-	return r.Instantiate(r.Definition)
+func Instantiate[S comparable, O any](def Definition[S, O], runner func(Definition[S, O]) FSM[S]) FSM[S] {
+	return runner(def)
 }

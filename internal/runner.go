@@ -56,7 +56,7 @@ func (f *FSM[S, O]) transition(ctx context.Context, o O) error {
 	return nil // no applicable transition found, that's fine
 }
 
-func Instantiate[S comparable, O any](def fsm.Definition[S, O]) fsm.FSM[S] {
+func New[S comparable, O any](def fsm.Definition[S, O]) fsm.FSM[S] {
 	i := &FSM[S, O]{
 		states:      def.States(),
 		transitions: def.Transitions(),

@@ -11,14 +11,7 @@ import (
 )
 
 func TestFooFSM(t *testing.T) {
-	def := example.FooDef{}
-
-	runner := fsm.Runner[example.FooState, example.FooObservation]{
-		Definition:  def,
-		Instantiate: Instantiate[example.FooState, example.FooObservation],
-	}
-
-	ins := runner.Run()
+	ins := fsm.Instantiate[example.FooState, example.FooObservation](example.FooDef{}, New[example.FooState, example.FooObservation])
 	fmt.Printf("%#v\n", ins)
 
 	fmt.Println("state:", ins.Current())
