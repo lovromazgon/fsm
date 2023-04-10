@@ -3,6 +3,7 @@ package temporal
 import (
 	"context"
 	"log"
+	"reflect"
 
 	"github.com/lovromazgon/fsm"
 	"go.temporal.io/sdk/client"
@@ -45,4 +46,8 @@ func New[S fsm.State, O any, I fsm.Instance[S, O]](c client.Client, def fsm.Defi
 		c:  c,
 		wr: wr,
 	}
+}
+
+func workflowNameForFSM[S fsm.State, O any, I fsm.Instance[S, O]](def fsm.Definition[S, O, I]) string {
+	return reflect.TypeOf(def).String()
 }
