@@ -23,7 +23,7 @@ import (
 type FooDef struct{}
 
 // New creates a new instance of the Foo state machine.
-func (FooDef) New() fsm.Instance[FooState, FooObservation] {
+func (d FooDef) New() *FooInstance {
 	return &FooInstance{}
 }
 
@@ -66,9 +66,9 @@ type FooInstance struct {
 	LastState FooState
 }
 
-func (a *FooInstance) Observe(ctx context.Context, i fsm.FSM[FooState]) (FooObservation, error) {
+func (a *FooInstance) Observe(ctx context.Context, i fsm.Helper[FooState]) (FooObservation, error) {
 	defer func() {
-		a.LastState = i.Current()
+		a.LastState = i.Current() // store last state after observation
 	}()
 	if a.LastState != i.Current() {
 		fmt.Println("new state, let's just execute action")
@@ -85,13 +85,13 @@ func (a *FooInstance) Observe(ctx context.Context, i fsm.FSM[FooState]) (FooObse
 	}
 }
 
-func (a *FooInstance) Transition(ctx context.Context, i fsm.FSM[FooState], t fsm.Transition[FooState, FooObservation], o FooObservation) error {
+func (a *FooInstance) Transition(ctx context.Context, i fsm.Helper[FooState], t fsm.Transition[FooState, FooObservation], o FooObservation) error {
 	fmt.Printf("BEFORE: currently %v, going to %v\n", i.Current(), t.To)
 	fmt.Printf("BEFORE: observation: %+v\n", o)
 	return nil
 }
 
-func (a *FooInstance) Action(ctx context.Context, i fsm.FSM[FooState], o FooObservation) error {
+func (a *FooInstance) Action(ctx context.Context, i fsm.Helper[FooState], o FooObservation) error {
 	fmt.Printf("ACTION: currently %v, old %v\n", i.Current(), a.LastState)
 	fmt.Printf("ACTION: observation: %+v\n", o)
 	return nil
@@ -106,6 +106,14 @@ const (
 	FooStateDone    FooState = "Done"
 	FooStateFailed  FooState = "Failed"
 )
+
+func (s FooState) Done() bool {
+	return s == FooStateDone || s == FooStateFailed
+}
+
+func (s FooState) Failed() bool {
+	return s == FooStateFailed
+}
 
 // FooObservation is the observation returned by FooInstance.Observe.
 type FooObservation struct {

@@ -7,14 +7,12 @@ import (
 	"github.com/lovromazgon/fsm"
 )
 
-type FSM[S comparable, O any] struct {
+type FSM[S fsm.State, O any] struct {
 	states      []S
 	transitions []fsm.Transition[S, O]
 	current     S
 	instance    fsm.Instance[S, O]
 }
-
-var _ fsm.FSM[int] = &FSM[int, any]{}
 
 func (f *FSM[S, O]) Current() S {
 	return f.current
@@ -56,7 +54,7 @@ func (f *FSM[S, O]) transition(ctx context.Context, o O) error {
 	return nil // no applicable transition found, that's fine
 }
 
-func New[S comparable, O any](def fsm.Definition[S, O]) fsm.FSM[S] {
+func New[S fsm.State, O any, I fsm.Instance[S, O]](def fsm.Definition[S, O, I]) fsm.FSM[S] {
 	i := &FSM[S, O]{
 		states:      def.States(),
 		transitions: def.Transitions(),
@@ -66,3 +64,11 @@ func New[S comparable, O any](def fsm.Definition[S, O]) fsm.FSM[S] {
 
 	return i
 }
+
+// check that FSM implements fsm.FSM, use dummyState as type fsm.State.
+var _ fsm.FSM[dummyState] = &FSM[dummyState, any]{}
+
+type dummyState string
+
+func (dummyState) Done() bool   { return false }
+func (dummyState) Failed() bool { return false }

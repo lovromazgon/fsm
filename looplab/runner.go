@@ -4,25 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
-	"sync"
 
 	looplab "github.com/looplab/fsm"
 	"github.com/lovromazgon/fsm"
 )
 
-type FSM[S comparable, O any] struct {
-	stateStringer stringer[S]
-
+type FSM[S fsm.State, O any] struct {
 	transitions []fsm.Transition[S, O]
 	instance    fsm.Instance[S, O]
 	fsm         *looplab.FSM
 }
 
-var _ fsm.FSM[int] = &FSM[int, any]{}
-
 func (f FSM[S, O]) Current() S {
-	return f.stateStringer.ToType(f.fsm.Current())
+	return S(f.fsm.Current())
 }
 
 func (f FSM[S, O]) Tick(ctx context.Context) error {
@@ -32,9 +26,9 @@ func (f FSM[S, O]) Tick(ctx context.Context) error {
 	}
 
 	for _, t := range f.transitions {
-		if t.From == f.stateStringer.ToType(f.fsm.Current()) && t.Condition(o) {
+		if t.From == S(f.fsm.Current()) && t.Condition(o) {
 			// this triggers transition
-			err := f.fsm.Event(ctx, buildEventName(t, f.stateStringer), o)
+			err := f.fsm.Event(ctx, eventNameForTransition(t), o)
 			if err != nil {
 				return err
 			}
@@ -43,7 +37,7 @@ func (f FSM[S, O]) Tick(ctx context.Context) error {
 	}
 
 	// send another dummy event to trigger action
-	err = f.fsm.Event(ctx, f.fsm.Current()+"::ACTION", o)
+	err = f.fsm.Event(ctx, eventNameForState(f.fsm.Current()), o)
 	if err != nil && !errors.Is(err, looplab.NoTransitionError{}) {
 		return err
 	}
@@ -51,10 +45,8 @@ func (f FSM[S, O]) Tick(ctx context.Context) error {
 	return nil
 }
 
-func New[S comparable, O any](def fsm.Definition[S, O]) fsm.FSM[S] {
+func New[S fsm.State, O any, I fsm.Instance[S, O]](def fsm.Definition[S, O, I]) fsm.FSM[S] {
 	f := &FSM[S, O]{
-		stateStringer: newStringer(def.States()),
-
 		transitions: def.Transitions(),
 		instance:    def.New(),
 	}
@@ -63,11 +55,11 @@ func New[S comparable, O any](def fsm.Definition[S, O]) fsm.FSM[S] {
 	callbacks := make(map[string]looplab.Callback)
 	for _, t := range def.Transitions() {
 		transition := t
-		event := buildEventName(t, f.stateStringer)
+		event := eventNameForTransition(t)
 		events = append(events, looplab.EventDesc{
 			Name: event,
-			Src:  []string{f.stateStringer.ToString(t.From)},
-			Dst:  f.stateStringer.ToString(t.To),
+			Src:  []string{string(t.From)},
+			Dst:  string(t.To),
 		})
 		callbacks["before_"+event] = func(ctx context.Context, e *looplab.Event) {
 			err := f.instance.Transition(ctx, f, transition, e.Args[0].(O))
@@ -78,14 +70,13 @@ func New[S comparable, O any](def fsm.Definition[S, O]) fsm.FSM[S] {
 	}
 
 	for _, s := range def.States() {
-		state := f.stateStringer.ToString(s)
 		// add dummy events that will be used to execute action in case no
 		// transition happens
-		event := state + "::ACTION"
+		event := eventNameForState(s)
 		events = append(events, looplab.EventDesc{
 			Name: event,
-			Src:  []string{state},
-			Dst:  state,
+			Src:  []string{string(s)},
+			Dst:  string(s),
 		})
 		callbacks["after_"+event] = func(ctx context.Context, e *looplab.Event) {
 			err := f.instance.Action(ctx, f, e.Args[0].(O))
@@ -96,7 +87,7 @@ func New[S comparable, O any](def fsm.Definition[S, O]) fsm.FSM[S] {
 	}
 
 	f.fsm = looplab.NewFSM(
-		f.stateStringer.ToString(def.States()[0]),
+		string(def.States()[0]),
 		events,
 		callbacks,
 	)
@@ -104,55 +95,18 @@ func New[S comparable, O any](def fsm.Definition[S, O]) fsm.FSM[S] {
 	return f
 }
 
-// cachedStringers caches stringers, so they are not recreated every time.
-var cachedStringers = sync.Map{}
-
-func newStringer[T any](list []T) stringer[T] {
-	t := reflect.TypeOf(new(T)).Elem()
-	if s, ok := cachedStringers.Load(t); ok {
-		// take existing stringer from cache
-		return s.(stringer[T])
-	}
-
-	var toStringFunc func(T) string
-	switch t.Kind() {
-	case reflect.Interface:
-		toStringFunc = func(t T) string {
-			return reflect.TypeOf(t).String()
-		}
-	default:
-		toStringFunc = func(t T) string {
-			return reflect.ValueOf(t).String()
-		}
-	}
-
-	mapping := make(map[string]T)
-	for _, t := range list {
-		mapping[toStringFunc(t)] = t
-	}
-
-	s := stringer[T]{
-		mapping:      mapping,
-		toStringFunc: toStringFunc,
-	}
-
-	cachedStringers.Store(t, s)
-	return s
+func eventNameForTransition[S fsm.State, O any](t fsm.Transition[S, O]) string {
+	return string(t.From) + "::" + string(t.To)
 }
 
-type stringer[T any] struct {
-	mapping      map[string]T
-	toStringFunc func(t T) string
+func eventNameForState[S ~string](s S) string {
+	return string(s) + "::action"
 }
 
-func (c stringer[T]) ToString(t T) string {
-	return c.toStringFunc(t)
-}
+// check that FSM implements fsm.FSM, use dummyState as type fsm.State.
+var _ fsm.FSM[dummyState] = &FSM[dummyState, any]{}
 
-func (c stringer[T]) ToType(s string) T {
-	return c.mapping[s]
-}
+type dummyState string
 
-func buildEventName[S comparable, O any](t fsm.Transition[S, O], stringer stringer[S]) string {
-	return stringer.ToString(t.From) + "::" + stringer.ToString(t.To)
-}
+func (dummyState) Done() bool   { return false }
+func (dummyState) Failed() bool { return false }

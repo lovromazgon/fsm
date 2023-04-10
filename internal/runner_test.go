@@ -6,12 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lovromazgon/fsm"
 	"github.com/lovromazgon/fsm/example"
 )
 
 func TestFooFSM(t *testing.T) {
-	ins := fsm.Instantiate[example.FooState, example.FooObservation](example.FooDef{}, New[example.FooState, example.FooObservation])
+	ins := New[example.FooState, example.FooObservation, *example.FooInstance](example.FooDef{})
 	fmt.Printf("%#v\n", ins)
 
 	fmt.Println("state:", ins.Current())
@@ -28,8 +27,12 @@ func TestFooFSM(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if ins.Current() == example.FooStateFailed {
+		if ins.Current().Done() {
 			break
 		}
+	}
+
+	if ins.Current().Failed() {
+		t.Fatalf("failed with state %s", ins.Current())
 	}
 }

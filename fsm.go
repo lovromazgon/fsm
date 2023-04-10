@@ -4,31 +4,38 @@ import (
 	"context"
 )
 
-type Definition[S comparable, O any] interface {
+type Definition[S State, O any, I Instance[S, O]] interface {
 	States() []S
 	Transitions() []Transition[S, O]
-	New() Instance[S, O]
+	New() I
 }
 
-type Instance[S comparable, O any] interface {
-	Observe(context.Context, FSM[S]) (O, error)
-	Transition(context.Context, FSM[S], Transition[S, O], O) error
-	Action(context.Context, FSM[S], O) error
+type Instance[S State, O any] interface {
+	Observe(context.Context, Helper[S]) (O, error)
+	Transition(context.Context, Helper[S], Transition[S, O], O) error
+	Action(context.Context, Helper[S], O) error
 }
 
-type Transition[S comparable, O any] struct {
+type State interface {
+	~string
+	Done() bool
+	Failed() bool
+}
+
+type Transition[S State, O any] struct {
 	From      S
 	To        S
 	Condition func(O) bool
 }
 
-type FSM[S comparable] interface {
+type FSM[S State] interface {
 	// Current returns the current state of the FSM instance.
 	Current() S
 	// Tick triggers next instance tick.
 	Tick(ctx context.Context) error
 }
 
-func Instantiate[S comparable, O any](def Definition[S, O], runner func(Definition[S, O]) FSM[S]) FSM[S] {
-	return runner(def)
+type Helper[S State] interface {
+	// Current returns the current state of the FSM instance.
+	Current() S
 }
