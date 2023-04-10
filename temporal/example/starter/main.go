@@ -20,13 +20,8 @@ func main() {
 
 	f := temporal.New[example.FooState, example.FooObservation, *example.FooInstance](c, example.FooDef{})
 
-	ticker := time.Tick(time.Second)
-	i := 0
-	for range ticker {
-		i++
-		if i == 10 {
-			break
-		}
+	for i := 0; i < 10; i++ {
 		fmt.Println(f.Current())
+		time.Sleep(time.Second)
 	}
 }
