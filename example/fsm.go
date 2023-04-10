@@ -1,3 +1,14 @@
+// Package example contains multiple structs that together form a runnable state
+// machine. The structs and their functionality:
+//   - FooDef - represents the structural definition of the state machine. It
+//     defines all states and transitions between them, as well as the
+//     conditions for when a transition should be applied.
+//   - FooInstance - represents a single instance of a running state machine. It
+//     contains methods for observing the state, for reacting to a transition
+//     change and for executing an action in a specific state.
+//   - FooObservation - holds the data observed in FooInstance.Observe. Based on
+//     the observation the FSM chooses the transition to a new state (if any).
+//   - FooState - represents a state of the state machine.
 package example
 
 import (
@@ -7,27 +18,16 @@ import (
 	"github.com/lovromazgon/fsm"
 )
 
-// FSM definition
-type FooFSM struct{}
-type FooState string
-type FooEvent interface{ fooEvent() }
+// FooDef is the structural definition of the Foo state machine (states and
+// transitions between states).
+type FooDef struct{}
 
-func (f FooFSM) FSMDefinition() fsm.Definition[FooState, FooEvent] {
-	return f
+// New creates a new instance of the Foo state machine.
+func (d FooDef) New() *FooInstance {
+	return &FooInstance{}
 }
 
-func (f FooFSM) BeforeTransition(ctx context.Context, i fsm.Instance[FooState, FooEvent], t fsm.Transition[FooState, FooEvent]) error {
-	fmt.Printf("BEFORE: currently %v, going to %v, because of %T\n", i.Current(), t.To, t.Event)
-	return nil
-}
-
-func (f FooFSM) AfterTransition(ctx context.Context, i fsm.Instance[FooState, FooEvent], t fsm.Transition[FooState, FooEvent]) error {
-	fmt.Printf("AFTER: currently %v, came from %v, because of %T\n", i.Current(), t.From, t.Event)
-	fmt.Printf("AFTER: full event: %+v\n", t.Event)
-	return nil
-}
-
-func (FooFSM) States() []FooState {
+func (FooDef) States() []FooState {
 	return []FooState{
 		FooStateRunning,
 		FooStateWaiting,
@@ -36,26 +36,70 @@ func (FooFSM) States() []FooState {
 	}
 }
 
-func (FooFSM) Events() []FooEvent {
-	return []FooEvent{
-		FooEventWait{},
-		FooEventStop{},
-		FooEventFail{},
+// Transitions returns the possible transitions. Each transition knows its own
+// conditions when it should apply. Transitions are ranked by priority, if two
+// transitions would apply based on an observation, the first one takes
+// precedence.
+func (FooDef) Transitions() []fsm.Transition[FooState, FooObservation] {
+	return []fsm.Transition[FooState, FooObservation]{
+		{From: FooStateRunning, To: FooStateWaiting, Condition: func(o FooObservation) bool {
+			return o.SomethingToObserve == "wait"
+		}},
+		{From: FooStateWaiting, To: FooStateDone, Condition: func(o FooObservation) bool {
+			return o.SomethingToObserve == "done"
+		}},
+		{From: FooStateWaiting, To: FooStateFailed, Condition: func(o FooObservation) bool {
+			return !o.ServiceIsUp
+		}},
+		{From: FooStateRunning, To: FooStateFailed, Condition: func(o FooObservation) bool {
+			return !o.ServiceIsUp
+		}},
+		{From: FooStateDone, To: FooStateFailed, Condition: func(o FooObservation) bool {
+			return !o.ServiceIsUp
+		}},
 	}
 }
 
-// Transitions returns the possible transitions.
-func (FooFSM) Transitions() []fsm.Transition[FooState, FooEvent] {
-	return []fsm.Transition[FooState, FooEvent]{
-		{Event: FooEventWait{}, From: FooStateRunning, To: FooStateWaiting},
-		{Event: FooEventStop{}, From: FooStateWaiting, To: FooStateDone},
-		{Event: FooEventFail{}, From: FooStateWaiting, To: FooStateFailed},
-		{Event: FooEventFail{}, From: FooStateRunning, To: FooStateFailed},
-		{Event: FooEventFail{}, From: FooStateDone, To: FooStateFailed},
+// FooInstance is an instance of the state machine. Observe, Transition and
+// Action are periodically called while the state machine is running.
+type FooInstance struct {
+	LastState FooState
+}
+
+func (a *FooInstance) Observe(ctx context.Context, i fsm.Helper[FooState]) (FooObservation, error) {
+	defer func() {
+		a.LastState = i.Current() // store last state after observation
+	}()
+	if a.LastState != i.Current() {
+		fmt.Println("new state, let's just execute action")
+		return FooObservation{ServiceIsUp: true}, nil
+	}
+	fmt.Println("same state as before, transitioning")
+	switch i.Current() {
+	case FooStateRunning:
+		return FooObservation{ServiceIsUp: true, SomethingToObserve: "wait"}, nil
+	case FooStateWaiting:
+		return FooObservation{ServiceIsUp: true, SomethingToObserve: "done"}, nil
+	default:
+		return FooObservation{ServiceIsUp: false}, nil
 	}
 }
 
-// define states
+func (a *FooInstance) Transition(ctx context.Context, i fsm.Helper[FooState], t fsm.Transition[FooState, FooObservation], o FooObservation) error {
+	fmt.Printf("BEFORE: currently %v, going to %v\n", i.Current(), t.To)
+	fmt.Printf("BEFORE: observation: %+v\n", o)
+	return nil
+}
+
+func (a *FooInstance) Action(ctx context.Context, i fsm.Helper[FooState], o FooObservation) error {
+	fmt.Printf("ACTION: currently %v, old %v\n", i.Current(), a.LastState)
+	fmt.Printf("ACTION: observation: %+v\n", o)
+	return nil
+}
+
+// FooState is a state in the FooInstance state machine.
+type FooState string
+
 const (
 	FooStateRunning FooState = "Running"
 	FooStateWaiting FooState = "Waiting"
@@ -63,17 +107,16 @@ const (
 	FooStateFailed  FooState = "Failed"
 )
 
-// define events
-type (
-	FooEventWait struct{}
-	FooEventStop struct {
-		EventsCanHaveFields int
-	}
-	FooEventFail struct {
-		Err error
-	}
-)
+func (s FooState) Done() bool {
+	return s == FooStateDone || s == FooStateFailed
+}
 
-func (FooEventWait) fooEvent() {}
-func (FooEventStop) fooEvent() {}
-func (FooEventFail) fooEvent() {}
+func (s FooState) Failed() bool {
+	return s == FooStateFailed
+}
+
+// FooObservation is the observation returned by FooInstance.Observe.
+type FooObservation struct {
+	SomethingToObserve string
+	ServiceIsUp        bool
+}

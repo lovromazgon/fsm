@@ -4,42 +4,38 @@ import (
 	"context"
 )
 
-type Definition[S comparable, E any] interface {
+type Definition[S State, O any, I Instance[S, O]] interface {
 	States() []S
-	Events() []E
-	Transitions() []Transition[S, E]
+	Transitions() []Transition[S, O]
+	New() I
 }
 
-type BeforeTransition[S comparable, E any] interface {
-	BeforeTransition(context.Context, Instance[S, E], Transition[S, E]) error
+type Instance[S State, O any] interface {
+	Observe(context.Context, Helper[S]) (O, error)
+	Transition(context.Context, Helper[S], Transition[S, O], O) error
+	Action(context.Context, Helper[S], O) error
 }
 
-type AfterTransition[S comparable, E any] interface {
-	AfterTransition(context.Context, Instance[S, E], Transition[S, E]) error
+type State interface {
+	~string
+	Done() bool
+	Failed() bool
 }
 
-type Transition[S comparable, E any] struct {
-	From  S
-	To    S
-	Event E
+type Transition[S State, O any] struct {
+	From      S
+	To        S
+	Condition func(O) bool
 }
 
-type Instance[S comparable, E any] interface {
-	// AvailableEvents returns a list of events available in the current state.
-	AvailableEvents() []E
-	// Can returns true if event can occur in the current state.
-	Can(E) bool
+type FSM[S State] interface {
 	// Current returns the current state of the FSM instance.
 	Current() S
-	// Send initiates a state transition with the event.
-	Send(context.Context, E) error
+	// Tick triggers next instance tick.
+	Tick(ctx context.Context) error
 }
 
-type Runner[S comparable, E any] struct {
-	Definition  Definition[S, E]
-	Instantiate func(Definition[S, E]) Instance[S, E]
-}
-
-func (r *Runner[S, E]) Run() Instance[S, E] {
-	return r.Instantiate(r.Definition)
+type Helper[S State] interface {
+	// Current returns the current state of the FSM instance.
+	Current() S
 }
