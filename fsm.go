@@ -2,7 +2,6 @@ package fsm
 
 import (
 	"context"
-	"reflect"
 )
 
 type FSM[S State, O any] interface {
@@ -36,13 +35,4 @@ type Transition[S State, O any] struct {
 type Helper[S State] interface {
 	// Current returns the current state of the FSM instance.
 	Current() S
-}
-
-func New[T any](f T) T {
-	t := reflect.TypeOf(f)
-	if t.Kind() == reflect.Ptr {
-		t = t.Elem()
-		return reflect.New(t).Interface().(T)
-	}
-	return reflect.New(t).Elem().Interface().(T)
 }

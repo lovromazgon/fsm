@@ -10,7 +10,7 @@ import (
 )
 
 func TestFooFSM(t *testing.T) {
-	ins := New[example.FooState, example.FooObservation](&example.FooFSM{})
+	ins := New[example.FooState, example.FooObservation](&example.FooFSM{LastState: "INITIAL"})
 	fmt.Printf("%#v\n", ins)
 
 	fmt.Println("state:", ins.Current())

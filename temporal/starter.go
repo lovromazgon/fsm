@@ -31,12 +31,12 @@ func (f FSM[S]) Tick(ctx context.Context) error {
 	return f.c.SignalWorkflow(ctx, f.wr.GetID(), f.wr.GetRunID(), "tick", nil)
 }
 
-func New[S fsm.State, O any](c client.Client, def fsm.FSM[S, O]) *FSM[S] {
+func New[S fsm.State, O any](c client.Client, ins fsm.FSM[S, O]) *FSM[S] {
 	workflowOptions := client.StartWorkflowOptions{
 		TaskQueue: "fsm",
 	}
 
-	wr, err := c.ExecuteWorkflow(context.Background(), workflowOptions, workflowNameForFSM(def))
+	wr, err := c.ExecuteWorkflow(context.Background(), workflowOptions, workflowNameForFSM(ins), ins)
 	if err != nil {
 		log.Fatalln("Unable to execute workflow", err)
 	}

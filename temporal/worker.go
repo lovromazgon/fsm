@@ -39,8 +39,8 @@ func RunWorker[S fsm.State, O any, FSM fsm.FSM[S, O]](def FSM, opt ...client.Opt
 
 func RegisterFSMWorkflow[S fsm.State, O any, FSM fsm.FSM[S, O]](def FSM, wr worker.WorkflowRegistry, ar worker.ActivityRegistry) {
 	transitions := def.Transitions()
-	wr.RegisterWorkflowWithOptions(func(ctx workflow.Context) error {
-		return newWorkflowInstance[S, O, FSM](def).Run(ctx)
+	wr.RegisterWorkflowWithOptions(func(ctx workflow.Context, ins FSM) error {
+		return newWorkflowInstance[S, O, FSM](ins).Run(ctx)
 	}, workflow.RegisterOptions{Name: workflowNameForFSM(def)})
 	ar.RegisterActivityWithOptions(func(ctx context.Context, ins FSM, h *Helper[S]) (observeDTO[S, O, FSM], error) {
 		o, err := ins.Observe(ctx, h)
@@ -81,11 +81,11 @@ type workflowInstance[S fsm.State, O any, FSM fsm.FSM[S, O]] struct {
 	helper   *Helper[S]
 }
 
-func newWorkflowInstance[S fsm.State, O any, FSM fsm.FSM[S, O]](def FSM) *workflowInstance[S, O, FSM] {
+func newWorkflowInstance[S fsm.State, O any, FSM fsm.FSM[S, O]](ins FSM) *workflowInstance[S, O, FSM] {
 	return &workflowInstance[S, O, FSM]{
-		instance: fsm.New(def),
+		instance: ins,
 		helper: &Helper[S]{
-			State: def.States()[0], // initial state
+			State: ins.States()[0], // initial state
 		},
 	}
 }

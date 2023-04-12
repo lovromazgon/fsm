@@ -58,6 +58,7 @@ func (a *FooFSM) Observe(ctx context.Context, i fsm.Helper[FooState]) (FooObserv
 	defer func() {
 		a.LastState = i.Current() // store last state after observation
 	}()
+	fmt.Printf("last state: %q, current: %q - ", a.LastState, i.Current())
 	if a.LastState != i.Current() {
 		fmt.Println("new state, let's just execute action")
 		return FooObservation{ServiceIsUp: true}, nil

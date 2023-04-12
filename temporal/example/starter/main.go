@@ -18,7 +18,7 @@ func main() {
 	}
 	defer c.Close()
 
-	f := temporal.New[example.FooState, example.FooObservation](c, &example.FooFSM{})
+	f := temporal.New[example.FooState, example.FooObservation](c, &example.FooFSM{LastState: "INITIAL"})
 
 	for i := 0; i < 10; i++ {
 		fmt.Println(f.Current())

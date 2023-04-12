@@ -45,15 +45,12 @@ func (f FSM[S, O]) Tick(ctx context.Context) error {
 	return nil
 }
 
-func New[S fsm.State, O any](def fsm.FSM[S, O]) *FSM[S, O] {
-	f := &FSM[S, O]{
-		transitions: def.Transitions(),
-		instance:    fsm.New(def),
-	}
+func New[S fsm.State, O any](ins fsm.FSM[S, O]) *FSM[S, O] {
+	var f *FSM[S, O]
 
-	events := make([]looplab.EventDesc, 0, len(def.Transitions())+len(def.States()))
+	events := make([]looplab.EventDesc, 0, len(ins.Transitions())+len(ins.States()))
 	callbacks := make(map[string]looplab.Callback)
-	for _, t := range def.Transitions() {
+	for _, t := range ins.Transitions() {
 		transition := t
 		event := eventNameForTransition(t)
 		events = append(events, looplab.EventDesc{
@@ -62,14 +59,14 @@ func New[S fsm.State, O any](def fsm.FSM[S, O]) *FSM[S, O] {
 			Dst:  string(t.To),
 		})
 		callbacks["before_"+event] = func(ctx context.Context, e *looplab.Event) {
-			err := f.instance.Transition(ctx, f, transition, e.Args[0].(O))
+			err := ins.Transition(ctx, f, transition, e.Args[0].(O))
 			if err != nil {
 				e.Cancel(err)
 			}
 		}
 	}
 
-	for _, s := range def.States() {
+	for _, s := range ins.States() {
 		// add dummy events that will be used to execute action in case no
 		// transition happens
 		event := eventNameForState(s)
@@ -79,19 +76,22 @@ func New[S fsm.State, O any](def fsm.FSM[S, O]) *FSM[S, O] {
 			Dst:  string(s),
 		})
 		callbacks["after_"+event] = func(ctx context.Context, e *looplab.Event) {
-			err := f.instance.Action(ctx, f, e.Args[0].(O))
+			err := ins.Action(ctx, f, e.Args[0].(O))
 			if err != nil {
 				e.Cancel(err)
 			}
 		}
 	}
 
-	f.fsm = looplab.NewFSM(
-		string(def.States()[0]),
-		events,
-		callbacks,
-	)
-
+	f = &FSM[S, O]{
+		transitions: ins.Transitions(),
+		instance:    ins,
+		fsm: looplab.NewFSM(
+			string(ins.States()[0]),
+			events,
+			callbacks,
+		),
+	}
 	return f
 }
 

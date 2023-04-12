@@ -34,7 +34,6 @@ func (f *FSM[S, O]) Tick(ctx context.Context) error {
 		return err
 	}
 
-	// TODO persist instance
 	return nil
 }
 
@@ -54,11 +53,11 @@ func (f *FSM[S, O]) transition(ctx context.Context, o O) error {
 	return nil // no applicable transition found, that's fine
 }
 
-func New[S fsm.State, O any](def fsm.FSM[S, O]) *FSM[S, O] {
+func New[S fsm.State, O any](instance fsm.FSM[S, O]) *FSM[S, O] {
 	return &FSM[S, O]{
-		states:      def.States(),
-		transitions: def.Transitions(),
-		current:     def.States()[0],
-		instance:    fsm.New(def),
+		states:      instance.States(),
+		transitions: instance.Transitions(),
+		current:     instance.States()[0],
+		instance:    instance,
 	}
 }
