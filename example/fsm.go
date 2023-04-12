@@ -1,12 +1,10 @@
 // Package example contains multiple structs that together form a runnable state
 // machine. The structs and their functionality:
-//   - FooDef - represents the structural definition of the state machine. It
-//     defines all states and transitions between them, as well as the
-//     conditions for when a transition should be applied.
-//   - FooInstance - represents a single instance of a running state machine. It
+//   - FooFSM - represents a single instance of a running state machine. It
 //     contains methods for observing the state, for reacting to a transition
-//     change and for executing an action in a specific state.
-//   - FooObservation - holds the data observed in FooInstance.Observe. Based on
+//     change and for executing an action in a specific state. It can store any
+//     state in its struct fields.
+//   - FooObservation - holds the data observed in FooFSM.Observe. Based on
 //     the observation the FSM chooses the transition to a new state (if any).
 //   - FooState - represents a state of the state machine.
 package example
@@ -18,16 +16,12 @@ import (
 	"github.com/lovromazgon/fsm"
 )
 
-// FooDef is the structural definition of the Foo state machine (states and
-// transitions between states).
-type FooDef struct{}
-
-// New creates a new instance of the Foo state machine.
-func (d FooDef) New() *FooInstance {
-	return &FooInstance{}
+// FooFSM is the Foo state machine.
+type FooFSM struct {
+	LastState FooState
 }
 
-func (FooDef) States() []FooState {
+func (*FooFSM) States() []FooState {
 	return []FooState{
 		FooStateRunning,
 		FooStateWaiting,
@@ -40,7 +34,7 @@ func (FooDef) States() []FooState {
 // conditions when it should apply. Transitions are ranked by priority, if two
 // transitions would apply based on an observation, the first one takes
 // precedence.
-func (FooDef) Transitions() []fsm.Transition[FooState, FooObservation] {
+func (*FooFSM) Transitions() []fsm.Transition[FooState, FooObservation] {
 	return []fsm.Transition[FooState, FooObservation]{
 		{From: FooStateRunning, To: FooStateWaiting, Condition: func(o FooObservation) bool {
 			return o.SomethingToObserve == "wait"
@@ -60,13 +54,7 @@ func (FooDef) Transitions() []fsm.Transition[FooState, FooObservation] {
 	}
 }
 
-// FooInstance is an instance of the state machine. Observe, Transition and
-// Action are periodically called while the state machine is running.
-type FooInstance struct {
-	LastState FooState
-}
-
-func (a *FooInstance) Observe(ctx context.Context, i fsm.Helper[FooState]) (FooObservation, error) {
+func (a *FooFSM) Observe(ctx context.Context, i fsm.Helper[FooState]) (FooObservation, error) {
 	defer func() {
 		a.LastState = i.Current() // store last state after observation
 	}()
@@ -85,19 +73,19 @@ func (a *FooInstance) Observe(ctx context.Context, i fsm.Helper[FooState]) (FooO
 	}
 }
 
-func (a *FooInstance) Transition(ctx context.Context, i fsm.Helper[FooState], t fsm.Transition[FooState, FooObservation], o FooObservation) error {
+func (a *FooFSM) Transition(ctx context.Context, i fsm.Helper[FooState], t fsm.Transition[FooState, FooObservation], o FooObservation) error {
 	fmt.Printf("BEFORE: currently %v, going to %v\n", i.Current(), t.To)
 	fmt.Printf("BEFORE: observation: %+v\n", o)
 	return nil
 }
 
-func (a *FooInstance) Action(ctx context.Context, i fsm.Helper[FooState], o FooObservation) error {
+func (a *FooFSM) Action(ctx context.Context, i fsm.Helper[FooState], o FooObservation) error {
 	fmt.Printf("ACTION: currently %v, old %v\n", i.Current(), a.LastState)
 	fmt.Printf("ACTION: observation: %+v\n", o)
 	return nil
 }
 
-// FooState is a state in the FooInstance state machine.
+// FooState is a state in the FooFSM state machine.
 type FooState string
 
 const (
@@ -115,7 +103,7 @@ func (s FooState) Failed() bool {
 	return s == FooStateFailed
 }
 
-// FooObservation is the observation returned by FooInstance.Observe.
+// FooObservation is the observation returned by FooFSM.Observe.
 type FooObservation struct {
 	SomethingToObserve string
 	ServiceIsUp        bool

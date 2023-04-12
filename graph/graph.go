@@ -9,7 +9,7 @@ import (
 	"github.com/lovromazgon/fsm"
 )
 
-func DefToGraph[S fsm.State, O any, I fsm.Instance[S, O]](def fsm.Definition[S, O, I]) (*cgraph.Graph, error) {
+func DefToGraph[S fsm.State, O any](def fsm.FSM[S, O]) (*cgraph.Graph, error) {
 	g := graphviz.New()
 	graph, err := g.Graph(graphviz.Directed)
 	if err != nil {

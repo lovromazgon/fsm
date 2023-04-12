@@ -31,7 +31,7 @@ func (f FSM[S]) Tick(ctx context.Context) error {
 	return f.c.SignalWorkflow(ctx, f.wr.GetID(), f.wr.GetRunID(), "tick", nil)
 }
 
-func New[S fsm.State, O any, I fsm.Instance[S, O]](c client.Client, def fsm.Definition[S, O, I]) fsm.FSM[S] {
+func New[S fsm.State, O any](c client.Client, def fsm.FSM[S, O]) *FSM[S] {
 	workflowOptions := client.StartWorkflowOptions{
 		TaskQueue: "fsm",
 	}
@@ -42,12 +42,12 @@ func New[S fsm.State, O any, I fsm.Instance[S, O]](c client.Client, def fsm.Defi
 	}
 	log.Println("Started workflow", "WorkflowID", wr.GetID(), "RunID", wr.GetRunID())
 
-	return FSM[S]{
+	return &FSM[S]{
 		c:  c,
 		wr: wr,
 	}
 }
 
-func workflowNameForFSM[S fsm.State, O any, I fsm.Instance[S, O]](def fsm.Definition[S, O, I]) string {
+func workflowNameForFSM[S fsm.State, O any](def fsm.FSM[S, O]) string {
 	return reflect.TypeOf(def).String()
 }

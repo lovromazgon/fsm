@@ -11,7 +11,7 @@ import (
 
 type FSM[S fsm.State, O any] struct {
 	transitions []fsm.Transition[S, O]
-	instance    fsm.Instance[S, O]
+	instance    fsm.FSM[S, O]
 	fsm         *looplab.FSM
 }
 
@@ -45,10 +45,10 @@ func (f FSM[S, O]) Tick(ctx context.Context) error {
 	return nil
 }
 
-func New[S fsm.State, O any, I fsm.Instance[S, O]](def fsm.Definition[S, O, I]) fsm.FSM[S] {
+func New[S fsm.State, O any](def fsm.FSM[S, O]) *FSM[S, O] {
 	f := &FSM[S, O]{
 		transitions: def.Transitions(),
-		instance:    def.New(),
+		instance:    fsm.New(def),
 	}
 
 	events := make([]looplab.EventDesc, 0, len(def.Transitions())+len(def.States()))
@@ -102,11 +102,3 @@ func eventNameForTransition[S fsm.State, O any](t fsm.Transition[S, O]) string {
 func eventNameForState[S ~string](s S) string {
 	return string(s) + "::action"
 }
-
-// check that FSM implements fsm.FSM, use dummyState as type fsm.State.
-var _ fsm.FSM[dummyState] = &FSM[dummyState, any]{}
-
-type dummyState string
-
-func (dummyState) Done() bool   { return false }
-func (dummyState) Failed() bool { return false }

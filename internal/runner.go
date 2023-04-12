@@ -11,7 +11,7 @@ type FSM[S fsm.State, O any] struct {
 	states      []S
 	transitions []fsm.Transition[S, O]
 	current     S
-	instance    fsm.Instance[S, O]
+	instance    fsm.FSM[S, O]
 }
 
 func (f *FSM[S, O]) Current() S {
@@ -54,21 +54,11 @@ func (f *FSM[S, O]) transition(ctx context.Context, o O) error {
 	return nil // no applicable transition found, that's fine
 }
 
-func New[S fsm.State, O any, I fsm.Instance[S, O]](def fsm.Definition[S, O, I]) fsm.FSM[S] {
-	i := &FSM[S, O]{
+func New[S fsm.State, O any](def fsm.FSM[S, O]) *FSM[S, O] {
+	return &FSM[S, O]{
 		states:      def.States(),
 		transitions: def.Transitions(),
 		current:     def.States()[0],
-		instance:    def.New(),
+		instance:    fsm.New(def),
 	}
-
-	return i
 }
-
-// check that FSM implements fsm.FSM, use dummyState as type fsm.State.
-var _ fsm.FSM[dummyState] = &FSM[dummyState, any]{}
-
-type dummyState string
-
-func (dummyState) Done() bool   { return false }
-func (dummyState) Failed() bool { return false }
