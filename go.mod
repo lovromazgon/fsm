@@ -3,6 +3,7 @@ module github.com/lovromazgon/fsm
 go 1.19
 
 require (
+	github.com/goccy/go-graphviz v0.1.1
 	github.com/looplab/fsm v1.0.0
 	go.temporal.io/sdk v1.21.1
 )
@@ -11,7 +12,6 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/facebookgo/clock v0.0.0-20150410010913-600d898af40a // indirect
 	github.com/fogleman/gg v1.3.0 // indirect
-	github.com/goccy/go-graphviz v0.1.1 // indirect
 	github.com/gogo/googleapis v1.4.1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/gogo/status v1.1.1 // indirect

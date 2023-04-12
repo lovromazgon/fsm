@@ -48,6 +48,6 @@ func New[S fsm.State, O any](c client.Client, def fsm.FSM[S, O]) *FSM[S] {
 	}
 }
 
-func workflowNameForFSM[S fsm.State, O any](def fsm.FSM[S, O]) string {
+func workflowNameForFSM(def any) string {
 	return reflect.TypeOf(def).String()
 }
